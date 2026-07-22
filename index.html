@@ -70,7 +70,7 @@ img{max-width:100%; display:block;}
 }
 .brand{display:flex; align-items:center; gap:12px;}
 .brand-mark{
-  width:46px; height:46px; border-radius:8px;
+  width:50px; height:50px; border-radius:8px;
   background:linear-gradient(135deg,var(--gulf-blue),var(--gulf-blue-dark));
   display:flex; align-items:center; justify-content:center;
   position:relative; overflow:hidden;
@@ -79,9 +79,9 @@ img{max-width:100%; display:block;}
 .brand-mark::after{
   content:"";
   position:absolute; width:14px; height:200%; background:var(--gulf-orange);
-  transform:rotate(30deg); left:14px; top:-50%;
+  transform:rotate(30deg); left:16px; top:-50%;
 }
-.brand-mark span{color:#fff; font-family:'Rajdhani',sans-serif; font-weight:700; font-size:20px; z-index:1;}
+.brand-mark span{color:#fff; font-family:'Rajdhani',sans-serif; font-weight:700; font-size:16px; letter-spacing:.5px; z-index:1;}
 .brand-text h1{font-size:20px; color:var(--gulf-blue); line-height:1;}
 .brand-text p{font-size:11px; color:var(--steel); text-transform:uppercase; letter-spacing:1.2px; margin-top:2px;}
 
@@ -674,7 +674,7 @@ function renderShell(){
   </div>
   <div class="brandbar">
     <div class="brand">
-      <div class="brand-mark"><span>SB</span></div>
+      <div class="brand-mark"><span>SPA</span></div>
       <div class="brand-text">
         <h1>Sri Pavan Agencies</h1>
         <p>Gulf Oil · Tyres · Spare Parts</p>
@@ -758,11 +758,28 @@ function renderPageBody(){
 function renderShop(){
   const products = DB.get("sba_products", []);
   const cats = ["All","Engine Oil","Tyres","Spare Parts"];
+  const q = state.search.trim().toLowerCase();
+  const terms = q.split(/\s+/).filter(Boolean);
   let list = products.filter(p=>{
     const matchCat = state.category === "All" || p.category === state.category;
-    const matchSearch = p.name.toLowerCase().includes(state.search.toLowerCase());
-    return matchCat && matchSearch;
+    if(!matchCat) return false;
+    if(!terms.length) return true;
+    const haystack = (p.name + " " + p.category + " " + p.desc).toLowerCase();
+    // every search word must appear somewhere in name/category/description
+    return terms.every(t => haystack.includes(t));
   });
+
+  // sort: exact / starts-with name matches first when searching
+  if(terms.length){
+    list = list.slice().sort((a,b)=>{
+      const an = a.name.toLowerCase(), bn = b.name.toLowerCase();
+      const aStarts = an.startsWith(terms[0]) ? 0 : 1;
+      const bStarts = bn.startsWith(terms[0]) ? 0 : 1;
+      if(aStarts !== bStarts) return aStarts - bStarts;
+      return an.localeCompare(bn);
+    });
+  }
+
   return `
   <div class="hero">
     <div class="hero-inner">
@@ -770,17 +787,24 @@ function renderShop(){
       <h2>Genuine Gulf oil, tyres &amp; spare parts — stocked and ready.</h2>
       <p>Browse the full catalogue, compare prices, and add your regulars to favourites for next time.</p>
       <div class="hero-search">
-        <input id="searchInput" placeholder="Search products, e.g. Gulf Pride, brake pad..." value="${state.search}">
+        <input id="searchInput" placeholder="Search products, e.g. Gulf Pride, brake pad, tyre size..." value="${escapeAttr(state.search)}">
+        ${state.search ? `<button type="button" class="btn btn-outline" id="clearSearchBtn" style="background:#fff;">✕ Clear</button>` : ""}
       </div>
+      ${state.search ? `<p style="margin-top:10px; color:#CFE1F0; font-size:13px;">${list.length} result${list.length!==1?'s':''} for "<b>${escapeHtml(state.search)}</b>"</p>` : ""}
     </div>
   </div>
   <div class="cat-tabs">
     ${cats.map(c=>`<button data-cat="${c}" class="${state.category===c?'active':''}">${c}</button>`).join("")}
   </div>
   ${list.length ? `<div class="grid">${list.map(p=>renderProductCard(p)).join("")}</div>` :
-    `<div class="empty-state"><div class="em-icon">🔍</div><h3>No products found</h3><p>Try a different search or category.</p></div>`}
+    `<div class="empty-state"><div class="em-icon">🔍</div><h3>No products found</h3><p>Try a different search term or category.${state.search?` No matches for "<b>${escapeHtml(state.search)}</b>".`:''}</p></div>`}
   `;
 }
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(str){ return escapeHtml(str); }
 
 function renderProductCard(p){
   const favs = getFavs();
@@ -915,13 +939,14 @@ function renderOrders(){
   return `<div class="page">
     <div class="page-head"><div><div class="eyebrow">Order history</div><h2>My Orders</h2></div></div>
     <div class="table-wrap"><table>
-      <thead><tr><th>Order ID</th><th>Date</th><th>Items</th><th>Total</th></tr></thead>
+      <thead><tr><th>Order ID</th><th>Date</th><th>Items</th><th>Total</th><th>Receipt</th></tr></thead>
       <tbody>
       ${orders.map(o=>`<tr>
         <td class="mono">${o.id}</td>
         <td>${new Date(o.date).toLocaleDateString()} ${new Date(o.date).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</td>
         <td>${o.items.map(i=>i.name+' ×'+i.qty).join(", ")}</td>
         <td class="mono">₹${o.total.toFixed(0)}</td>
+        <td><button class="btn btn-outline btn-sm" data-receipt="${o.id}">⬇ Download</button></td>
       </tr>`).join("")}
       </tbody>
     </table></div>
@@ -977,11 +1002,11 @@ function renderOwnerDashboard(){
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Recent Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Date</th></tr></thead>
+      <thead><tr><th>Recent Order</th><th>Customer</th><th>Items</th><th>Total</th><th>Date</th><th>Receipt</th></tr></thead>
       <tbody>
       ${orders.slice(-6).reverse().map(o=>`
-        <tr><td class="mono">${o.id}</td><td>${o.customerName}</td><td>${o.items.length} item(s)</td><td class="mono">₹${o.total.toFixed(0)}</td><td>${new Date(o.date).toLocaleDateString()}</td></tr>
-      `).join("") || `<tr><td colspan="5" style="text-align:center; color:var(--steel); padding:30px;">No orders yet.</td></tr>`}
+        <tr><td class="mono">${o.id}</td><td>${o.customerName}</td><td>${o.items.length} item(s)</td><td class="mono">₹${o.total.toFixed(0)}</td><td>${new Date(o.date).toLocaleDateString()}</td><td><button class="btn btn-outline btn-sm" data-receipt="${o.id}">⬇</button></td></tr>
+      `).join("") || `<tr><td colspan="6" style="text-align:center; color:var(--steel); padding:30px;">No orders yet.</td></tr>`}
       </tbody>
     </table>
   </div>`;
@@ -1074,11 +1099,11 @@ function renderOwnerReports(){
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Order ID</th><th>Customer</th><th>Phone</th><th>Items</th><th>Total</th><th>Date</th></tr></thead>
+      <thead><tr><th>Order ID</th><th>Customer</th><th>Phone</th><th>Items</th><th>Total</th><th>Date</th><th>Receipt</th></tr></thead>
       <tbody>
       ${orders.slice().reverse().map(o=>`
-        <tr><td class="mono">${o.id}</td><td>${o.customerName}</td><td class="mono">${o.phone}</td><td>${o.items.map(i=>i.name+' ×'+i.qty).join(", ")}</td><td class="mono">₹${o.total.toFixed(0)}</td><td>${new Date(o.date).toLocaleDateString()}</td></tr>
-      `).join("") || `<tr><td colspan="6" style="text-align:center; color:var(--steel); padding:30px;">No orders yet.</td></tr>`}
+        <tr><td class="mono">${o.id}</td><td>${o.customerName}</td><td class="mono">${o.phone}</td><td>${o.items.map(i=>i.name+' ×'+i.qty).join(", ")}</td><td class="mono">₹${o.total.toFixed(0)}</td><td>${new Date(o.date).toLocaleDateString()}</td><td><button class="btn btn-outline btn-sm" data-receipt="${o.id}">⬇</button></td></tr>
+      `).join("") || `<tr><td colspan="7" style="text-align:center; color:var(--steel); padding:30px;">No orders yet.</td></tr>`}
       </tbody>
     </table>
   </div>`;
@@ -1105,8 +1130,10 @@ function bindPageEvents(){
   // shop
   const searchInput = document.getElementById("searchInput");
   if(searchInput){
-    searchInput.oninput = (e)=>{ state.search = e.target.value; renderPageBody(); searchInput.focus(); searchInput.setSelectionRange(searchInput.value.length,searchInput.value.length); };
+    searchInput.oninput = (e)=>{ state.search = e.target.value; renderPageBody(); const si = document.getElementById("searchInput"); if(si){ si.focus(); si.setSelectionRange(si.value.length,si.value.length); } };
   }
+  const clearSearchBtn = document.getElementById("clearSearchBtn");
+  if(clearSearchBtn){ clearSearchBtn.onclick = ()=>{ state.search = ""; renderPageBody(); }; }
   document.querySelectorAll("[data-cat]").forEach(b=>{ b.onclick = ()=>{ state.category=b.dataset.cat; renderPageBody(); }; });
   document.querySelectorAll("[data-open]").forEach(el=>{ el.onclick = ()=>{ state.activeProductModal = el.dataset.open; refreshModal(); }; });
   document.querySelectorAll("[data-fav]").forEach(el=>{ el.onclick = (e)=>{ e.stopPropagation(); toggleFav(el.dataset.fav); }; });
@@ -1119,6 +1146,7 @@ function bindPageEvents(){
   document.querySelectorAll("[data-cartremove]").forEach(el=>{ el.onclick = ()=> removeFromCart(el.dataset.cartremove); });
   const checkoutBtn = document.getElementById("checkoutBtn");
   if(checkoutBtn) checkoutBtn.onclick = placeOrder;
+  document.querySelectorAll("[data-receipt]").forEach(el=>{ el.onclick = ()=> downloadReceipt(el.dataset.receipt); });
 
   // owner tabs
   document.querySelectorAll("[data-otab]").forEach(b=>{ b.onclick = ()=>{ state.ownerTab=b.dataset.otab; state.editingProduct=null; renderOwner_refresh(); }; });
@@ -1267,6 +1295,101 @@ function placeOrder(){
   toast("Order placed successfully! Total ₹" + total.toFixed(0), "success");
   state.route = "orders";
   render();
+  // auto-generate & download the receipt for this order
+  downloadReceipt(order.id);
+}
+
+/* ================= RECEIPT (generate + download) ================= */
+function buildReceiptHTML(order){
+  const dt = new Date(order.date);
+  const dateStr = dt.toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'});
+  const timeStr = dt.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+  const rows = order.items.map(i=>{
+    const rate = Math.round(i.price*(1-(i.discount||0)/100));
+    const lineTotal = rate*i.qty;
+    return `<tr>
+      <td>${escapeHtml(i.name)}</td>
+      <td style="text-align:center;">${i.qty}</td>
+      <td style="text-align:right;">Rs. ${i.price}</td>
+      <td style="text-align:right;">${i.discount? i.discount+'%' : '-'}</td>
+      <td style="text-align:right;">Rs. ${lineTotal.toFixed(0)}</td>
+    </tr>`;
+  }).join("");
+  const subtotal = order.items.reduce((s,i)=> s + i.price*i.qty, 0);
+  const discountTotal = subtotal - order.total;
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<title>Receipt - ${escapeHtml(order.id)} - Sri Pavan Agencies</title>
+<style>
+  *{box-sizing:border-box;}
+  body{font-family:Arial, Helvetica, sans-serif; background:#F6F4EF; color:#12161C; padding:30px;}
+  .receipt{max-width:640px; margin:0 auto; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 4px 16px rgba(0,0,0,.1);}
+  .r-head{background:linear-gradient(120deg,#0A3A63,#0F4C81); color:#fff; padding:26px 30px;}
+  .r-head h1{margin:0; font-size:22px; letter-spacing:.5px;}
+  .r-head p{margin:4px 0 0; font-size:12.5px; color:#CFE1F0;}
+  .r-stripes{height:5px; background:repeating-linear-gradient(115deg,#0F4C81 0 24px,#E8590C 24px 29px,#0F4C81 29px 53px,#fff 53px 57px);}
+  .r-body{padding:26px 30px;}
+  .r-meta{display:flex; justify-content:space-between; font-size:13px; color:#5B6774; margin-bottom:18px; flex-wrap:wrap; gap:10px;}
+  .r-meta b{color:#12161C;}
+  table{width:100%; border-collapse:collapse; margin-bottom:18px;}
+  th{background:#F6F4EF; text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.5px; color:#5B6774; padding:10px 8px; border-bottom:1.5px solid #E1DDD3;}
+  td{padding:9px 8px; font-size:13.5px; border-bottom:1px solid #F0EDE5;}
+  .r-totals{margin-left:auto; width:260px;}
+  .r-totals div{display:flex; justify-content:space-between; padding:6px 0; font-size:13.5px; color:#5B6774;}
+  .r-totals .grand{border-top:2px dashed #E1DDD3; margin-top:6px; padding-top:10px; font-size:17px; font-weight:700; color:#12161C;}
+  .r-foot{padding:20px 30px; background:#F6F4EF; text-align:center; font-size:12px; color:#5B6774; border-top:1px solid #ECE8DE;}
+  .r-thanks{font-size:14px; font-weight:700; color:#0F4C81; margin-bottom:4px;}
+  @media print{ body{background:#fff; padding:0;} .receipt{box-shadow:none; border-radius:0;} }
+</style>
+</head>
+<body>
+  <div class="receipt">
+    <div class="r-head">
+      <h1>SRI PAVAN AGENCIES</h1>
+      <p>Authorised Gulf Oil, Tyres &amp; Spare Parts Distributor</p>
+      <p>${escapeHtml(SHOP.address)} &nbsp;|&nbsp; Phone: ${escapeHtml(SHOP.phone)}</p>
+    </div>
+    <div class="r-stripes"></div>
+    <div class="r-body">
+      <div class="r-meta">
+        <div>Receipt No: <b>${escapeHtml(order.id)}</b><br>Date: <b>${dateStr}, ${timeStr}</b></div>
+        <div>Customer: <b>${escapeHtml(order.customerName)}</b><br>Phone: <b>${escapeHtml(order.phone)}</b></div>
+      </div>
+      <table>
+        <thead><tr><th>Item</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Discount</th><th style="text-align:right;">Amount</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="r-totals">
+        <div><span>Subtotal</span><span>Rs. ${subtotal.toFixed(0)}</span></div>
+        <div><span>Discount</span><span>- Rs. ${discountTotal.toFixed(0)}</span></div>
+        <div class="grand"><span>Total Paid</span><span>Rs. ${order.total.toFixed(0)}</span></div>
+      </div>
+    </div>
+    <div class="r-foot">
+      <div class="r-thanks">Thank you for shopping with us!</div>
+      Sri Pavan Agencies &bull; Owner: ${escapeHtml(SHOP.ownerName)} &bull; ${escapeHtml(SHOP.address)}<br>
+      This is a computer-generated receipt.
+    </div>
+  </div>
+</body></html>`;
+}
+
+function downloadReceipt(orderId){
+  const orders = DB.get("sba_orders",[]);
+  const order = orders.find(o=>o.id===orderId);
+  if(!order){ toast("Receipt not found for this order","error"); return; }
+  const html = buildReceiptHTML(order);
+  const blob = new Blob([html], {type:"text/html"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `SriPavanAgencies_Receipt_${order.id}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(url), 1500);
+  toast("Receipt downloaded","success");
 }
 
 function renderShellSoft(){
